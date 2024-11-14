@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>Dual Joysticks</title>
+  <style>
+    .joystick-container {
+      display: block; /* Stacks the containers vertically */
+      margin: 20px auto; /* Centers the joystick horizontally and adds vertical spacing */
+      text-align: center; /* Ensures the canvas is centered within the container */
+    }
+    /*canvas {
+      border: 1px solid #ccc;  Optional: Adds a border for visual distinction 
+    }*/
+
+  </style>
+</head>
+<body>
+  <div class="joystick-container" id="joy1Div">
+    <canvas id="joystick1" width="450" height="450"></canvas>
+  </div>
+  <div class="joystick-container" id="joy2Div">
+    <canvas id="joystick2" width="450" height="450"></canvas>
+  </div>
+
+  <script type="text/javascript">
+    function createJoystick(containerId) {
+  var JoyStick = function (container, parameters) {
+    parameters = parameters || {};
+    var title = parameters.title || "joystick",
+        width = parameters.width || 0,
+        height = parameters.height || 0,
+        internalFillColor = parameters.internalFillColor || "#00AA00",
+        internalLineWidth = parameters.internalLineWidth || 2,
+        internalStrokeColor = parameters.internalStrokeColor || "#003300",
+        externalLineWidth = parameters.externalLineWidth || 2,
+        externalStrokeColor = parameters.externalStrokeColor || "#008000",
+        autoReturnToCenter = parameters.autoReturnToCenter !== false;
+
+    var objContainer = document.getElementById(container);
+    var canvas = objContainer.querySelector('canvas');
+    var context = canvas.getContext("2d");
+
+    var pressed = false;
+    var circumference = 2 * Math.PI;
+    var internalRadius = (canvas.width - (canvas.width / 2 + 10)) / 2;
+    var maxMoveStick = internalRadius * 2; // Adjusted for more freedom
+    var externalRadius = internalRadius + 45;
+    var centerX = canvas.width / 2;
+    var centerY = canvas.height / 2;
+    var movedX = centerX;
+    var movedY = centerY;
+
+    // Add event listeners for touch and mouse events
+    canvas.addEventListener("touchstart", onTouchStart, false);
+    canvas.addEventListener("touchmove", onTouchMove, false);
+    canvas.addEventListener("touchend", onTouchEnd, false);
+    canvas.addEventListener("mousedown", onMouseDown, false);
+    canvas.addEventListener("mousemove", onMouseMove, false);
+    canvas.addEventListener("mouseup", onMouseUp, false);
+
+    // Draw joystick components
+    drawExternal();
+    drawInternal();
+
+    function drawExternal() {
+      context.beginPath();
+      context.arc(centerX, centerY, externalRadius, 0, circumference, false);
+      context.lineWidth = externalLineWidth;
+      context.strokeStyle = externalStrokeColor;
+      context.stroke();
+    }
+
+    function drawInternal() {
+      context.beginPath();
+      context.arc(movedX, movedY, internalRadius, 0, circumference, false);
+      var grd = context.createRadialGradient(movedX, movedY, 5, movedX, movedY, internalRadius);
+      grd.addColorStop(0, internalFillColor);
+      grd.addColorStop(1, internalStrokeColor);
+      context.fillStyle = grd;
+      context.fill();
+      context.lineWidth = internalLineWidth;
+      context.strokeStyle = internalStrokeColor;
+      context.stroke();
+    }
+
+    function onTouchStart(event) {
+      pressed = true;
+    }
+
+    function onTouchMove(event) {
+      if (pressed) {
+        event.preventDefault();
+        var rect = canvas.getBoundingClientRect();
+        var touchX = event.touches[0].clientX - rect.left;
+        var touchY = event.touches[0].clientY - rect.top;
+        constrainMovement(touchX, touchY);
+      }
+    }
+
+    function onTouchEnd() {
+      pressed = false;
+      if (autoReturnToCenter) {
+        resetJoystick();
+      }
+    }
+
+    function onMouseDown(event) {
+      pressed = true;
+    }
+
+    function onMouseMove(event) {
+      if (pressed) {
+        var rect = canvas.getBoundingClientRect();
+        var mouseX = event.clientX - rect.left;
+        var mouseY = event.clientY - rect.top;
+        constrainMovement(mouseX, mouseY);
+      }
+    }
+
+    function onMouseUp() {
+      pressed = false;
+      if (autoReturnToCenter) {
+        resetJoystick();
+      }
+    }
+
+    function constrainMovement(x, y) {
+      var dx = x - centerX;
+      var dy = y - centerY;
+      var distance = Math.sqrt(dx * dx + dy * dy);
+      var maxDistance = externalRadius - internalRadius;
+
+      // Allow movement up to the external boundary
+      if (distance > maxDistance) {
+        var angle = Math.atan2(dy, dx);
+        movedX = centerX + maxDistance * Math.cos(angle);
+        movedY = centerY + maxDistance * Math.sin(angle);
+      } else {
+        movedX = x;
+        movedY = y;
+      }
+
+      updateJoystick();
+    }
+
+    function updateJoystick() {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      drawExternal();
+      drawInternal();
+    }
+
+    function resetJoystick() {
+      movedX = centerX;
+      movedY = centerY;
+      updateJoystick();
+    }
+
+    this.GetX = function () {
+      return (100 * ((movedX - centerX) / maxMoveStick)).toFixed();
+    };
+    this.GetY = function () {
+      return (100 * ((movedY - centerY) / maxMoveStick) * -1).toFixed();
+    };
+  };
+
+  return new JoyStick(containerId);
+}
+
+    // Create joystick instances
+    var Joy1 = createJoystick("joy1Div");
+    var Joy2 = createJoystick("joy2Div");
+
+    // Update joystick data periodically
+    setInterval(function () {
+      var x1 = Joy1.GetX();
+      var y1 = Joy1.GetY();
+      var y2 = Joy2.GetY(); // Only vertical movement for the second joystick
+
+      fetch(`/update?x1=${x1}&y1=${y1}&y2=${y2}`)
+        .then(response => response.text())
+        .then(data => console.log(data))
+        .catch(error => console.error('Error:', error));
+    }, 50);
+  </script>
+</body>
+</html>
